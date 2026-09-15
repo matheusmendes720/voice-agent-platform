@@ -1,6 +1,5 @@
 """Scrolling transcript widget."""
 from __future__ import annotations
-from rich.text import Text
 from textual.widgets import Static
 
 
@@ -13,8 +12,8 @@ class TranscriptWidget(Static):
     }
     """
 
-    def __init__(self, max_lines: int = 200) -> None:
-        super().__init__()
+    def __init__(self, *, max_lines: int = 200, **kwargs: object) -> None:
+        super().__init__(**kwargs)
         self._lines: list[str] = []
         self._max = max_lines
 
@@ -22,7 +21,10 @@ class TranscriptWidget(Static):
         self._lines.append(f"{role}: {text}")
         if len(self._lines) > self._max:
             self._lines = self._lines[-self._max :]
-        self.refresh()
+        self.update(self._text())
 
-    def render(self) -> Text:
-        return Text("\n".join(self._lines) or "(no transcript yet)")
+    def _text(self) -> str:
+        return "\n".join(self._lines) or "(no transcript yet)"
+
+    def on_mount(self) -> None:
+        self.update("(no transcript yet)")

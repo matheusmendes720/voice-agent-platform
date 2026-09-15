@@ -1,6 +1,5 @@
 """Per-stage latency badges."""
 from __future__ import annotations
-from rich.text import Text
 from textual.widgets import Static
 
 
@@ -15,23 +14,25 @@ class LatencyWidget(Static):
 
     STAGES = ("asr", "llm", "tts", "playback")
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, **kwargs: object) -> None:
+        super().__init__(**kwargs)
         self._values: dict[str, float] = {}
 
-    def update(self, stage: str, ms: float) -> None:
+    def set_stage(self, stage: str, ms: float) -> None:
+        """Data-layer API: store a latency sample."""
         self._values[stage] = float(ms)
-        self.refresh()
+        self.update(self._render_str())
 
     def snapshot(self) -> dict[str, float]:
         return dict(self._values)
 
-    def _render(self) -> str:
+    def _render_str(self) -> str:
         parts = []
         for stage in self.STAGES:
             if stage in self._values:
                 parts.append(f"{stage}:{self._values[stage]:.0f}ms")
-        return "  ".join(parts) if parts else "(no latency yet)"
+        text = "  ".join(parts) if parts else "(no latency yet)"
+        return f"[bold yellow]{text}[/bold yellow]"
 
-    def render(self) -> Text:
-        return Text(self._render(), style="bold yellow")
+    def on_mount(self) -> None:
+        self.update(self._render_str())
