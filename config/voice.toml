@@ -1,0 +1,20 @@
+[voicestudio]
+url = "http://127.0.0.1:3900"
+default_voice = "alloy"
+engine = "omnivoice"
+sample_rate = 24000
+
+[llm]
+provider = "minimax"
+model = "MiniMax-M3"
+api_key = ""
+
+[audio]
+sample_rate = 16000
+chunk_ms = 100
+channels = 1
+
+[agent]
+name = "VoiceAgent"
+language = "pt"
+max_history = 10
