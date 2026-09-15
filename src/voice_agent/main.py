@@ -53,10 +53,12 @@ async def _run_hud(config: VoiceAgentConfig) -> int:
 async def main() -> int:
     parser = argparse.ArgumentParser(prog="voice-agent")
     parser.add_argument("--headless", action="store_true", help="run without TUI")
+    parser.add_argument("--hud", action="store_true", help="run with Textual HUD (default)")
     parser.add_argument("--config", default="config/voice.toml", help="path to voice.toml")
     args = parser.parse_args()
 
     config = VoiceAgentConfig.from_toml(args.config)
+    # Default to HUD when neither flag is set.
     if args.headless:
         return await _run_headless(config)
     return await _run_hud(config)

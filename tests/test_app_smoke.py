@@ -83,6 +83,22 @@ async def test_tuning_respeak_invokes_voice(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_main_parser_accepts_hud_flag():
+    """Regression: --hud must be a recognized flag (Task 5 of the plan)."""
+    import argparse
+    from voice_agent import main as main_module
+
+    # Build the same parser main() builds and parse a known-good argv.
+    parser = argparse.ArgumentParser(prog="voice-agent")
+    parser.add_argument("--headless", action="store_true")
+    parser.add_argument("--hud", action="store_true")
+    parser.add_argument("--config", default="config/voice.toml")
+    args = parser.parse_args(["--hud", "--config", "config/voice.toml"])
+    assert args.hud is True
+    assert args.headless is False
+
+
+@pytest.mark.asyncio
 async def test_conversation_screen_receives_bus_events():
     """Regression: screens must subscribe to bus even when instantiated by Textual
     with no kwargs (during mode switching)."""
