@@ -21,6 +21,9 @@ class VoiceAgentApp(App):
     BINDINGS = [
         Binding("tab", "next_mode", "Next mode"),
         Binding("shift+tab", "prev_mode", "Prev mode"),
+        Binding("1", "go_conversation", "Conversation"),
+        Binding("2", "go_waveform", "Waveform"),
+        Binding("3", "go_tuning", "Tuning"),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -59,6 +62,15 @@ class VoiceAgentApp(App):
         keys = list(self.MODES.keys())
         self._mode_index = (self._mode_index - 1) % len(keys)
         self.switch_mode(keys[self._mode_index])
+
+    async def action_go_conversation(self) -> None:
+        self.switch_mode("conversation")
+
+    async def action_go_waveform(self) -> None:
+        self.switch_mode("waveform")
+
+    async def action_go_tuning(self) -> None:
+        self.switch_mode("tuning")
 
 
 def build_app(agent: Any, bus: EventBus, voice: Any = None) -> VoiceAgentApp:
