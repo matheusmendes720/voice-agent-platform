@@ -80,3 +80,31 @@ async def test_tuning_respeak_invokes_voice(monkeypatch):
         # Sample sentence is the first positional arg.
         sample = voice.synthesize.call_args[0][0]
         assert "Olá" in sample
+
+
+@pytest.mark.asyncio
+async def test_conversation_screen_receives_bus_events():
+    """Regression: screens must subscribe to bus even when instantiated by Textual
+    with no kwargs (during mode switching)."""
+    from voice_agent.hud.events import MicLevel, LatencySample, TranscriptFinal
+    from voice_agent.hud.widgets.meter import MeterWidget
+    from voice_agent.hud.widgets.latency import LatencyWidget
+    from voice_agent.hud.widgets.transcript import TranscriptWidget
+    cfg = VoiceAgentConfig()
+    bus = EventBus()
+    agent = VoiceAgent(cfg, bus=bus)
+    app = build_app(agent, bus)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # The screen's on_mount must fall back to self.app.bus.
+        bus.publish(MicLevel(rms=0.7, ts=1.0))
+        bus.publish(LatencySample(stage="tts", ms=123.0, ts=2.0))
+        bus.publish(TranscriptFinal(text="hello", language="en", ts=3.0))
+        for _ in range(4):
+            await pilot.pause()
+        meter = app.screen.query_one("#meter", MeterWidget)
+        latency = app.screen.query_one("#latency", LatencyWidget)
+        transcript = app.screen.query_one("#transcript", TranscriptWidget)
+        assert meter.rms == pytest.approx(0.7)
+        assert latency.snapshot()["tts"] == pytest.approx(123.0)
+        assert any("hello" in line for line in transcript._lines)

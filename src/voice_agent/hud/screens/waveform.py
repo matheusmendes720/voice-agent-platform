@@ -30,10 +30,14 @@ class WaveformScreen(Screen):
 
     async def on_mount(self) -> None:
         if self.bus is None:
+            app_bus = getattr(self.app, "bus", None)
+            if app_bus is not None:
+                self.bus = app_bus
+        if self.bus is None:
             return
         self._sub = self.bus.subscribe()
         self._pump = self._pump_events()
-        self.run_worker(self._pump, exclusive=True)
+        self.run_worker(self._pump, exclusive=True, thread=False)
 
     async def _pump_events(self) -> None:
         from ..events import MicLevel
