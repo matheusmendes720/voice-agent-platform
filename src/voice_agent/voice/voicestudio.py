@@ -134,7 +134,7 @@ class VoiceStudioClient:
     def is_available(self) -> bool:
         """Check if VoiceStudio is reachable."""
         try:
-            with httpx.get(f"{self.base_url}/model/status", timeout=3.0) as r:
-                return r.status_code == 200
+            r = httpx.get(f"{self.base_url}/model/status", timeout=3.0)
+            return r.status_code == 200
         except Exception:
             return False
