@@ -1,6 +1,10 @@
 """Agent state for LangGraph."""
+from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..hud.bus import EventBus
 
 
 @dataclass
@@ -11,3 +15,4 @@ class AgentState:
     tools_results: dict[str, Any] = field(default_factory=dict)
     interrupted: bool = False
     voice_config: dict[str, Any] = field(default_factory=dict)
+    bus: "EventBus | None" = None
