@@ -1,8 +1,15 @@
 """VoiceStudio HTTP client for TTS and ASR."""
 from __future__ import annotations
-from dataclasses import dataclass
+import io
+import time
+import wave
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 import httpx
+
+if TYPE_CHECKING:
+    from ..hud.bus import EventBus
 
 
 @dataclass
@@ -29,10 +36,15 @@ class PersonaProfile:
 
 
 class VoiceStudioClient:
-    """Synchronous HTTP client for VoiceStudio API (TTS + ASR)."""
+    """HTTP client for VoiceStudio API (TTS + ASR)."""
 
-    def __init__(self, base_url: str = "http://127.0.0.1:3900") -> None:
+    def __init__(self, base_url: str = "http://127.0.0.1:3900", bus: "EventBus | None" = None) -> None:
         self.base_url = base_url.rstrip("/")
+        self.bus = bus
+
+    def _publish(self, event: Any) -> None:
+        if self.bus is not None:
+            self.bus.publish(event)
 
     def synthesize(
         self,
@@ -40,10 +52,12 @@ class VoiceStudioClient:
         profile_id: str = "alloy",
         response_format: str = "pcm",
         speed: float = 1.0,
-        **kwargs,
+        **kwargs: Any,
     ) -> SynthesisResult:
         """Generate speech via VoiceStudio TTS."""
-        payload = {
+        from ..hud.events import AudioOutputStart, AudioOutputEnd, LatencySample
+
+        payload: dict[str, Any] = {
             "input": text,
             "voice": profile_id,
             "response_format": response_format,
@@ -53,18 +67,24 @@ class VoiceStudioClient:
             if k in kwargs and kwargs[k] is not None:
                 payload[k] = kwargs[k]
 
-        with httpx.post(
-            f"{self.base_url}/v1/audio/speech",
-            json=payload,
-            headers={"Content-Type": "application/json"},
-            timeout=30.0,
-        ) as resp:
-            resp.raise_for_status()
-            return SynthesisResult(
-                audio_bytes=resp.content,
-                duration_ms=0,
-                sample_rate=24000 if response_format == "pcm" else 24000,
-            )
+        self._publish(AudioOutputStart(ts=time.monotonic()))
+        t0 = time.monotonic()
+        try:
+            with httpx.post(
+                f"{self.base_url}/v1/audio/speech",
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=30.0,
+            ) as resp:
+                resp.raise_for_status()
+                audio_bytes = resp.content
+        finally:
+            elapsed_ms = (time.monotonic() - t0) * 1000.0
+            self._publish(LatencySample(stage="tts", ms=elapsed_ms, ts=time.monotonic()))
+
+        duration_ms = int(len(audio_bytes) / 24000 / 2 * 1000) if response_format == "pcm" else 0
+        self._publish(AudioOutputEnd(duration_ms=duration_ms, ts=time.monotonic()))
+        return SynthesisResult(audio_bytes=audio_bytes, duration_ms=duration_ms, sample_rate=24000)
 
     async def stream_synthesize(
         self,
@@ -78,15 +98,9 @@ class VoiceStudioClient:
         yield result.audio_bytes
 
     def transcribe(self, audio_bytes: bytes, sample_rate: int = 24000) -> TranscriptResult:
-        """Transcribe audio bytes via /v1/audio/transcriptions.
+        """Transcribe audio bytes via /v1/audio/transcriptions."""
+        from ..hud.events import TranscriptFinal, LatencySample
 
-        audio_bytes: raw PCM or WAV data. If raw PCM, sample_rate is used
-        to build a proper WAV header (24kHz mono 16-bit).
-        """
-        import io
-        import wave
-
-        # Wrap raw PCM in a WAV header if needed
         if audio_bytes[:4] != b"RIFF":
             buf = io.BytesIO()
             with wave.open(buf, "wb") as w:
@@ -97,15 +111,25 @@ class VoiceStudioClient:
             audio_bytes = buf.getvalue()
 
         files = {"file": ("recording.wav", audio_bytes, "audio/wav")}
-        with httpx.post(
-            f"{self.base_url}/v1/audio/transcriptions",
-            files=files,
-            data={"model": "whisper"},
-            timeout=60.0,
-        ) as resp:
-            resp.raise_for_status()
-            data = resp.json()
-            return TranscriptResult(text=data.get("text", ""))
+        t0 = time.monotonic()
+        data: dict[str, Any] = {}
+        try:
+            with httpx.post(
+                f"{self.base_url}/v1/audio/transcriptions",
+                files=files,
+                data={"model": "whisper"},
+                timeout=60.0,
+            ) as resp:
+                resp.raise_for_status()
+                data = resp.json()
+        finally:
+            elapsed_ms = (time.monotonic() - t0) * 1000.0
+            self._publish(LatencySample(stage="asr", ms=elapsed_ms, ts=time.monotonic()))
+
+        text = data.get("text", "")
+        language = data.get("language")
+        self._publish(TranscriptFinal(text=text, language=language, ts=time.monotonic()))
+        return TranscriptResult(text=text)
 
     def is_available(self) -> bool:
         """Check if VoiceStudio is reachable."""
