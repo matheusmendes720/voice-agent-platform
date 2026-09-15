@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..hud.bus import EventBus
+    from ..events.bus import EventBus
 
 
 @dataclass

@@ -1,8 +1,8 @@
 """Tests for the EventBus."""
 import asyncio
 import pytest
-from voice_agent.hud.events import MicLevel, TranscriptFinal
-from voice_agent.hud.bus import EventBus
+from voice_agent.events.events import MicLevel, TranscriptFinal
+from voice_agent.events.bus import EventBus
 
 
 @pytest.mark.asyncio

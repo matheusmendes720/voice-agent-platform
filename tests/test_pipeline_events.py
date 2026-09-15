@@ -1,8 +1,8 @@
 """Tests that AudioPipeline publishes MicLevel + AudioChunk events."""
 import asyncio
 import pytest
-from voice_agent.hud.events import MicLevel, AudioChunk
-from voice_agent.hud.bus import EventBus
+from voice_agent.events.events import MicLevel, AudioChunk
+from voice_agent.events.bus import EventBus
 from voice_agent.voice.pipeline import AudioPipeline
 
 

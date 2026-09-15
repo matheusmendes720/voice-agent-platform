@@ -1,7 +1,7 @@
 """Tests for HUD event dataclasses."""
 from dataclasses import FrozenInstanceError
 import pytest
-from voice_agent.hud.events import MicLevel, TranscriptFinal
+from voice_agent.events.events import MicLevel, TranscriptFinal
 
 
 def test_miclevel_is_frozen():

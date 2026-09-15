@@ -1,8 +1,8 @@
 """Tests that VoiceAgent core publishes LLMComplete / Error events."""
 import asyncio
 import pytest
-from voice_agent.hud.events import LLMComplete, Error
-from voice_agent.hud.bus import EventBus
+from voice_agent.events.events import LLMComplete, Error
+from voice_agent.events.bus import EventBus
 from voice_agent.config import VoiceAgentConfig
 from voice_agent.agent.core import VoiceAgent, _call_llm
 

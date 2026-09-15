@@ -4,12 +4,12 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
-from ..hud.events import LLMComplete, Error
+from ..events.events import LLMComplete, Error
 from ..config import VoiceAgentConfig
 from .state import AgentState
 
 if TYPE_CHECKING:
-    from ..hud.bus import EventBus
+    from ..events.bus import EventBus
     from ..voice.pipeline import AudioPipeline
     from ..voice.voicestudio import VoiceStudioClient
 

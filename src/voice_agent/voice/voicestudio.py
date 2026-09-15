@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 if TYPE_CHECKING:
-    from ..hud.bus import EventBus
+    from ..events.bus import EventBus
 
 
 @dataclass
@@ -55,7 +55,7 @@ class VoiceStudioClient:
         **kwargs: Any,
     ) -> SynthesisResult:
         """Generate speech via VoiceStudio TTS."""
-        from ..hud.events import AudioOutputStart, AudioOutputEnd, LatencySample
+        from ..events.events import AudioOutputStart, AudioOutputEnd, LatencySample
 
         payload: dict[str, Any] = {
             "input": text,
@@ -70,14 +70,14 @@ class VoiceStudioClient:
         self._publish(AudioOutputStart(ts=time.monotonic()))
         t0 = time.monotonic()
         try:
-            with httpx.post(
+            resp = httpx.post(
                 f"{self.base_url}/v1/audio/speech",
                 json=payload,
                 headers={"Content-Type": "application/json"},
                 timeout=30.0,
-            ) as resp:
-                resp.raise_for_status()
-                audio_bytes = resp.content
+            )
+            resp.raise_for_status()
+            audio_bytes = resp.content
         finally:
             elapsed_ms = (time.monotonic() - t0) * 1000.0
             self._publish(LatencySample(stage="tts", ms=elapsed_ms, ts=time.monotonic()))
@@ -99,7 +99,7 @@ class VoiceStudioClient:
 
     def transcribe(self, audio_bytes: bytes, sample_rate: int = 24000) -> TranscriptResult:
         """Transcribe audio bytes via /v1/audio/transcriptions."""
-        from ..hud.events import TranscriptFinal, LatencySample
+        from ..events.events import TranscriptFinal, LatencySample
 
         if audio_bytes[:4] != b"RIFF":
             buf = io.BytesIO()
@@ -114,14 +114,14 @@ class VoiceStudioClient:
         t0 = time.monotonic()
         data: dict[str, Any] = {}
         try:
-            with httpx.post(
+            resp = httpx.post(
                 f"{self.base_url}/v1/audio/transcriptions",
                 files=files,
                 data={"model": "whisper"},
                 timeout=60.0,
-            ) as resp:
-                resp.raise_for_status()
-                data = resp.json()
+            )
+            resp.raise_for_status()
+            data = resp.json()
         finally:
             elapsed_ms = (time.monotonic() - t0) * 1000.0
             self._publish(LatencySample(stage="asr", ms=elapsed_ms, ts=time.monotonic()))

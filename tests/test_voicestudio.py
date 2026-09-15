@@ -17,8 +17,8 @@ class TestVoiceStudioClient:
 
 @pytest.mark.asyncio
 async def test_voicestudio_publishes_tts_events(monkeypatch):
-    from voice_agent.hud.events import AudioOutputStart, AudioOutputEnd, LatencySample
-    from voice_agent.hud.bus import EventBus
+    from voice_agent.events.events import AudioOutputStart, AudioOutputEnd, LatencySample
+    from voice_agent.events.bus import EventBus
 
     bus = EventBus()
     sub = bus.subscribe()
@@ -53,8 +53,8 @@ async def test_voicestudio_publishes_tts_events(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_voicestudio_publishes_asr_event(monkeypatch):
-    from voice_agent.hud.events import TranscriptFinal, LatencySample
-    from voice_agent.hud.bus import EventBus
+    from voice_agent.events.events import TranscriptFinal, LatencySample
+    from voice_agent.events.bus import EventBus
 
     bus = EventBus()
     sub = bus.subscribe()

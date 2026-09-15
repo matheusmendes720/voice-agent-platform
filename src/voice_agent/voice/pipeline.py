@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..hud.bus import EventBus
+    from ..events.bus import EventBus
 
 
 @dataclass
@@ -39,13 +39,13 @@ class AudioPipeline:
     def _publish_mic(self, rms: float) -> None:
         if self.bus is None:
             return
-        from ..hud.events import MicLevel
+        from ..events.events import MicLevel
         self.bus.publish(MicLevel(rms=float(rms), ts=time.monotonic()))
 
     def _publish_chunk(self, pcm_bytes: bytes) -> None:
         if self.bus is None:
             return
-        from ..hud.events import AudioChunk as HudAudioChunk
+        from ..events.events import AudioChunk as HudAudioChunk
         self.bus.publish(HudAudioChunk(data=pcm_bytes, sample_rate=self.sample_rate, ts=time.monotonic()))
 
     # Test hooks — keep tiny; used by tests/test_pipeline_events.py.
