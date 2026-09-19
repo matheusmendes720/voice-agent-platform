@@ -26,8 +26,10 @@ class AudioConfig:
     sample_rate: int = 16000
     chunk_ms: int = 100
     channels: int = 1
-    input_device: int = 2  # Headset Ba-FON240 — verified working, RMS > 100
-    silence_threshold: float = 100.0  # RMS below this = silence (env-adaptive)
+    # None = use OS default (whatever Sound panel sets). Hardcode a device
+    # index here only if you want to override the system choice.
+    input_device: int | None = None
+    silence_threshold: float = 100.0
 
 
 @dataclass

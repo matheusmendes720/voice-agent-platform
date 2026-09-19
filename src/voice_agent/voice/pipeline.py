@@ -27,7 +27,7 @@ class AudioPipeline:
         chunk_ms: int = 100,
         channels: int = 1,
         threshold: float = 100.0,
-        input_device: int | None = 2,
+        input_device: int | None = None,
         bus: "EventBus | None" = None,
     ) -> None:
         self.sample_rate = sample_rate
@@ -35,6 +35,8 @@ class AudioPipeline:
         self.chunk_size = int(sample_rate * chunk_ms / 1000)
         self.channels = channels
         self.threshold = threshold
+        # Use the OS default input device when not specified — respect the
+        # user's existing audio configuration (set via Windows Sound panel).
         self.input_device = input_device
         self.bus = bus
         self._stream: sd.InputStream | None = None
