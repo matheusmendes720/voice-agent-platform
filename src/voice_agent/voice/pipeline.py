@@ -30,6 +30,7 @@ class AudioPipeline:
         bus: "EventBus | None" = None,
     ) -> None:
         self.sample_rate = sample_rate
+        self.chunk_ms = chunk_ms
         self.chunk_size = int(sample_rate * chunk_ms / 1000)
         self.channels = channels
         self.threshold = threshold
