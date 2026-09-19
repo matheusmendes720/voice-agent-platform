@@ -65,6 +65,7 @@ class AudioPipeline:
                 dtype="int16",
                 blocksize=self.chunk_size,
             )
+            self._stream.start()
         data, _ = self._stream.read(self.chunk_size)
         rms = float(np.sqrt(np.mean(data.astype(float) ** 2)))
         self._publish_mic(rms)
@@ -106,6 +107,7 @@ class AudioPipeline:
                 dtype="int16",
                 blocksize=self.chunk_size,
             )
+            self._stream.start()  # otherwise read() returns -9983 Stream is stopped
         frames: list[np.ndarray] = []
         silent_run = 0
         speech_started = False
