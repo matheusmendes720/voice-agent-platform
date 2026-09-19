@@ -66,7 +66,7 @@ class SessionState:
 class RichCLI:
     """Interactive Rich-based REPL."""
 
-    BANNER = "[bold cyan]voice-agent CLI[/bold cyan] — [dim]type /help for commands[/dim]"
+    BANNER = "[bold cyan]voice-agent[/bold cyan] — [dim]listening to mic, speak to chat[/dim]"
 
     def __init__(self, config: VoiceAgentConfig) -> None:
         self.config = config
