@@ -126,8 +126,7 @@ class RichCLI:
         "  /speed <0.5-2.0>  set TTS speed\n"
         "  /instruct <text>  set TTS instruct prompt (or /instruct clear)\n"
         "  /language <code>  set recognition language (pt | en | …)\n"
-        "  /mode push-to-talk | open-mic\n"
-        "  /say <text>       synthesize & play arbitrary text (test TTS)\n"
+        "  /say <text>       type a turn instead of speaking\n"
         "  /status           print status table\n"
         "  /help             show this help\n"
         "  /quit             exit\n"
@@ -142,21 +141,25 @@ class RichCLI:
             return 2
 
         self.console.print(self.BANNER)
-        self.console.print(self.HELP_TEXT)
+        self.console.print(
+            "[bold green]listening to mic[/bold green] — speak to chat. "
+            "Type /help for commands. Ctrl+C to exit."
+        )
 
-        # Spawn the bus subscriber that keeps state fresh.
+        # Bus subscriber keeps state fresh + prints transcripts as they land.
         pump_task = asyncio.create_task(self._pump_events())
 
-        # Spawn the agent loop (placeholder sleep — replaced when real LLM is wired).
+        # Agent loop: record_utterance → ASR → LLM → TTS → play.
         agent_task = asyncio.create_task(self.agent.run())
 
-        # REPL on stdin (non-blocking via asyncio loop).
+        # REPL on stdin — used only for /commands, NOT for normal conversation.
         try:
             await self._repl()
         finally:
             self._stopped = True
             agent_task.cancel()
             pump_task.cancel()
+            self.pipeline.close()
             await self.bus.close()
             self.console.print("[dim]bye.[/dim]")
         return 0
@@ -196,11 +199,11 @@ class RichCLI:
 
     async def _repl(self) -> None:
         loop = asyncio.get_event_loop()
+        # Render an unobtrusive prompt that doesn't suggest typing chat input.
+        self.console.print()
         while not self._stopped:
-            # Read a line off stdin without blocking the event loop.
             line = await loop.run_in_executor(None, self._readline)
             if line is None:
-                # EOF (Ctrl-D / piped input closed) — exit cleanly.
                 return
             line = line.strip()
             if not line:
@@ -208,13 +211,13 @@ class RichCLI:
             if line.startswith("/"):
                 await self._handle_command(line)
             else:
-                await self._handle_turn(line)
+                # Free-form text typed at the prompt: route it as a /say turn.
+                await self._speak(line)
+                self.console.print(f"[bold cyan]{self.state.voice_id}[/bold cyan] > ", end="")
 
     def _readline(self) -> str | None:
         try:
-            # Use Rich Console for the prompt so it renders styled + newline-safe.
-            self.console.print(f"[bold cyan]{self.state.voice_id}[/bold cyan] > ", end="")
-            return input()
+            return input(f"[bold cyan]{self.state.voice_id}[/bold cyan] > ")
         except EOFError:
             return None
 
