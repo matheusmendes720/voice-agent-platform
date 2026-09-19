@@ -168,13 +168,22 @@ class RichCLI:
                 if isinstance(ev, MicLevel):
                     self.state.last_mic_rms = ev.rms
                 elif isinstance(ev, TranscriptFinal):
-                    self.state.last_user_text = ev.text
+                    text = (ev.text or "").strip()
+                    if not text or text == self.state.last_user_text:
+                        continue
+                    self.state.last_user_text = text
+                    self.console.print(f"[bold cyan]you:[/bold cyan] {text}")
                 elif isinstance(ev, LLMComplete):
-                    self.state.last_llm_text = ev.text
+                    text = (ev.text or "").strip()
+                    if text and text != self.state.last_llm_text:
+                        self.state.last_llm_text = text
+                        self.console.print(f"[bold magenta]agent:[/bold magenta] {text}")
                 elif isinstance(ev, LatencySample):
                     self.state.last_latency[ev.stage] = ev.ms
                     if ev.stage == "asr":
                         self.state.last_asr_ms = ev.ms
+                elif isinstance(ev, AudioOutputStart):
+                    self.console.print("[dim]🔊 speaking…[/dim]")
                 elif isinstance(ev, AudioOutputEnd):
                     self.state.last_tts_ms = ev.duration_ms
                 elif isinstance(ev, ErrorEvent):
