@@ -4,9 +4,10 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
-from ..events.events import LLMToken, LLMComplete, Error
+from ..events.events import LLMToken, LLMComplete, Error, AudioOutputStart, AudioOutputEnd, LatencySample
 from ..config import VoiceAgentConfig
 from .state import AgentState
+from .sentence_stream import parse_sentences_fast
 
 if TYPE_CHECKING:
     from ..events.bus import EventBus
@@ -108,15 +109,28 @@ class VoiceAgent:
             reply = await self._turn(user_text)
             if not reply:
                 continue
-            try:
-                synth = self.voice.synthesize(
-                    reply,
-                    profile_id=self.config.voicestudio.default_voice,
-                )
-            except Exception as e:  # noqa: BLE001
-                self._publish(Error(message=str(e), source="tts", ts=time.monotonic()))
-                continue
-            await asyncio.to_thread(self.pipeline.play, synth.audio_bytes, synth.sample_rate)
+            # Per-sentence synthesis: speak the first sentence while the rest
+            # is still being parsed. Reduces perceived latency vs. wait-for-all.
+            for sentence in parse_sentences_fast(reply):
+                try:
+                    self._publish(AudioOutputStart(ts=time.monotonic()))
+                    t0 = time.monotonic()
+                    synth = self.voice.synthesize(
+                        sentence,
+                        profile_id=self.config.voicestudio.default_voice,
+                    )
+                    elapsed_ms = (time.monotonic() - t0) * 1000.0
+                    self._publish(LatencySample(stage="tts", ms=elapsed_ms, ts=time.monotonic()))
+                except Exception as e:  # noqa: BLE001
+                    self._publish(Error(message=str(e), source="tts", ts=time.monotonic()))
+                    continue
+                if synth and synth.audio_bytes:
+                    await asyncio.to_thread(
+                        self.pipeline.play, synth.audio_bytes, synth.sample_rate
+                    )
+                    self._publish(
+                        AudioOutputEnd(duration_ms=synth.duration_ms, ts=time.monotonic())
+                    )
 
     def stop(self) -> None:
         self._running = False
