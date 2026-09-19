@@ -5,6 +5,14 @@ import re
 from typing import AsyncIterator
 
 _BOUNDARY = re.compile(r"([.!?…])")
+# Tokens too short risk mid-word splits ("O Sr."). Hold them until either a
+# real sentence follows or the buffer would otherwise stall.
+_MIN_SENTENCE_CHARS = 25
+# Common abbreviations whose trailing "." must NOT split.
+_KEEP_TOGETHER = re.compile(
+    r"\b(Sr|Sra|Dr|Dra|Prof|Profª|St|Mr|Mrs|Ms|vs|etc|e|p|ex|nº|n)\.$",
+    re.IGNORECASE,
+)
 
 
 async def sentences_from_tokens(tokens: AsyncIterator[str]) -> AsyncIterator[str]:
@@ -22,20 +30,36 @@ async def sentences_from_tokens(tokens: AsyncIterator[str]) -> AsyncIterator[str
             end = m.end()
             sentence = buf[:end].strip()
             buf = buf[end:]
-            if sentence:
-                yield sentence
+            if not sentence:
+                continue
+            # Don't flush tiny fragments — wait for more context.
+            if len(sentence) < _MIN_SENTENCE_CHARS and buf and not re.match(r"^[\s]", buf):
+                # Put it back and wait for the next chunk.
+                buf = sentence + " " + buf
+                break
+            yield sentence
     tail = buf.strip()
     if tail:
         yield tail
 
 
 def parse_sentences_fast(text: str) -> list[str]:
-    """Split a fully-formed reply into sentences (sync helper, used for tests)."""
-    parts = []
+    """Split a fully-formed reply into sentences (sync helper, used for tests).
+
+    Skips splitting on common abbreviations so "O Sr. Matheus" stays together.
+    Always emits at least one chunk — if no split happened, returns the full
+    text as one sentence (so per-sentence TTS still works for short replies).
+    """
+    # Build matches without emitting fragments containing abbreviations.
+    parts: list[str] = []
     buf = ""
-    for ch in text:
+    for i, ch in enumerate(text):
         buf += ch
         if ch in ".!?…":
+            tail = buf.rstrip()
+            # If the current chunk ends with a known abbreviation, don't split.
+            if _KEEP_TOGETHER.search(tail):
+                continue
             s = buf.strip()
             if s:
                 parts.append(s)
@@ -43,6 +67,9 @@ def parse_sentences_fast(text: str) -> list[str]:
     tail = buf.strip()
     if tail:
         parts.append(tail)
+    # Edge case: no terminators at all → return the whole text as one chunk.
+    if not parts and text.strip():
+        parts.append(text.strip())
     return parts
 
 

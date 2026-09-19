@@ -291,10 +291,11 @@ class RichCLI:
                 live.console.print(self.HELP)
             elif cmd == "/voice":
                 if not arg:
-                    live.console.print(f"[dim]voice = {self.state.voice}[/dim]")
+                    live.console.print(f"[dim]voice = {self.agent.voice_id}[/dim]")
                 else:
+                    self.agent.voice_id = arg
                     self.state.voice = arg
-                    live.console.print(f"[green]voice → {arg}[/green]")
+                    live.console.print(f"[green]voice → {arg} (applied to agent)[/green]")
             elif cmd == "/speed":
                 try:
                     v = float(arg)
@@ -322,7 +323,7 @@ class RichCLI:
             self.bus.publish(LLMComplete(text=f"/say: {text}", ts=time.monotonic()))
             self.vs.synthesize(
                 text,
-                profile_id=self.state.voice,
+                profile_id=self.agent.voice_id,
                 speed=self.state.speed,
                 instruct=self.state.instruct,
             )

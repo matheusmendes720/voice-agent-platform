@@ -59,6 +59,9 @@ class VoiceAgent:
         self.bus = bus
         self.pipeline = pipeline
         self.voice = voice
+        # Single source of truth for the TTS voice used by the loop.
+        # Mutable so the CLI can change it via `/voice` without restarting.
+        self.voice_id: str = config.voicestudio.default_voice
         self.state = AgentState(bus=bus)
         self._running = False
 
@@ -131,7 +134,7 @@ class VoiceAgent:
                     t0 = time.monotonic()
                     synth = self.voice.synthesize(
                         sentence,
-                        profile_id=self.config.voicestudio.default_voice,
+                        profile_id=self.voice_id,
                     )
                     elapsed_ms = (time.monotonic() - t0) * 1000.0
                     self._publish(LatencySample(stage="tts", ms=elapsed_ms, ts=time.monotonic()))
