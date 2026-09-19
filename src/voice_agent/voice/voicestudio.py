@@ -114,11 +114,13 @@ class VoiceStudioClient:
         t0 = time.monotonic()
         data: dict[str, Any] = {}
         try:
+            # First call after server restart can exceed 60s while the ASR
+            # backend warms up — bump to 180s for the warm-up call.
             resp = httpx.post(
                 f"{self.base_url}/v1/audio/transcriptions",
                 files=files,
                 data={"model": "whisper"},
-                timeout=60.0,
+                timeout=180.0,
             )
             resp.raise_for_status()
             data = resp.json()
