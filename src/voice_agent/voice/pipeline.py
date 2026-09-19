@@ -86,3 +86,58 @@ class AudioPipeline:
         if self._stream:
             self._stream.close()
             self._stream = None
+
+    def record_utterance(
+        self,
+        max_seconds: float = 8.0,
+        silence_chunks_to_end: int = 8,
+        on_progress=None,
+    ) -> bytes:
+        """Capture one utterance: start when speech detected, end on silence.
+
+        Returns raw PCM int16 LE bytes (16 kHz mono) ready for ASR.
+        Blocks for up to max_seconds. Calls on_progress(seconds) if given.
+        """
+        if self._stream is None:
+            self._stream = sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=self.channels,
+                dtype="int16",
+                blocksize=self.chunk_size,
+            )
+        frames: list[np.ndarray] = []
+        silent_run = 0
+        speech_started = False
+        chunks_per_sec = 1000 / self.chunk_ms
+        max_chunks = int(max_seconds * chunks_per_sec)
+        chunks_read = 0
+        while chunks_read < max_chunks:
+            data, _ = self._stream.read(self.chunk_size)
+            rms = float(np.sqrt(np.mean(data.astype(float) ** 2)))
+            self._publish_mic(rms)
+            flat = data.flatten()
+            is_speech = rms > self.threshold
+            if is_speech:
+                frames.append(flat)
+                silent_run = 0
+                if not speech_started:
+                    speech_started = True
+            else:
+                silent_run += 1
+                if speech_started:
+                    # already in utterance — keep padding a tiny bit but count silence
+                    pass
+            chunks_read += 1
+            elapsed = chunks_read / chunks_per_sec
+            if speech_started and silent_run >= silence_chunks_to_end:
+                if on_progress:
+                    on_progress(elapsed)
+                break
+            if speech_started and on_progress:
+                on_progress(elapsed)
+        if speech_started:
+            pcm = np.concatenate(frames).tobytes()
+            # push the captured bytes as one AudioChunk event so the HUD logs it
+            self._publish_chunk(pcm)
+            return pcm
+        return b""
