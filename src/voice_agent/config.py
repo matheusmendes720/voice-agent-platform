@@ -15,8 +15,10 @@ class VoiceStudioConfig:
 @dataclass
 class LLMConfig:
     provider: str = "minimax"
-    model: str = "MiniMax-M3"
+    model: str = "M2.5highspeed"
+    base_url: str = "https://api.minimax.io/anthropic"
     api_key: str = ""
+    system: str = ""  # default is supplied by MiniMaxStreamClient if empty
 
 
 @dataclass

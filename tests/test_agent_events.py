@@ -1,7 +1,7 @@
 """Tests that VoiceAgent core publishes LLMComplete / Error events."""
 import asyncio
 import pytest
-from voice_agent.events.events import LLMComplete, Error
+from voice_agent.events.events import LLMComplete, Error, LLMToken
 from voice_agent.events.bus import EventBus
 from voice_agent.config import VoiceAgentConfig
 from voice_agent.agent.core import VoiceAgent, _call_llm, _call_llm_streaming
@@ -13,7 +13,8 @@ async def test_agent_emits_llm_complete_event(monkeypatch):
     sub = bus.subscribe()
     cfg = VoiceAgentConfig()
 
-    async def fake_stream(prompt: str, publish):
+    async def fake_stream(prompt, publish, *, llm_config=None):
+        publish(LLMToken(token="olá ", ts=0.0))
         publish(LLMComplete(text="olá do agente", ts=0.0))
 
     monkeypatch.setattr("voice_agent.agent.core._call_llm_streaming", fake_stream)
@@ -37,7 +38,7 @@ async def test_agent_emits_error_event(monkeypatch):
     sub = bus.subscribe()
     cfg = VoiceAgentConfig()
 
-    async def bad_stream(prompt: str, publish):
+    async def bad_stream(prompt, publish, *, llm_config=None):
         raise RuntimeError("LLM exploded")
 
     monkeypatch.setattr("voice_agent.agent.core._call_llm_streaming", bad_stream)
@@ -58,6 +59,8 @@ async def test_agent_emits_error_event(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_default_call_llm():
-    # Sanity: default placeholder still works (echoes prompt).
+    # Sanity: the streaming pipeline produces some non-empty reply.
+    # If MINIMAX_API_KEY is set, this hits real MiniMax; if not, the echo
+    # placeholder is used. Either way the result is non-empty.
     out = await _call_llm("hi")
-    assert "hi" in out
+    assert isinstance(out, str) and len(out) > 0

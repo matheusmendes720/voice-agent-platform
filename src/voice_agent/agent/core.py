@@ -15,18 +15,32 @@ if TYPE_CHECKING:
     from ..voice.voicestudio import VoiceStudioClient
 
 
-async def _call_llm_streaming(prompt: str, publish):
-    """Placeholder streaming LLM — emits one LLMToken per word, then LLMComplete.
+async def _call_llm_streaming(prompt: str, publish, *, llm_config=None):
+    """Streaming LLM dispatch — uses MiniMax when MINIMAX_API_KEY is set,
+    otherwise falls back to the local echo placeholder.
 
-    Replace _call_llm_streaming with a real MiniMax streaming chat call when
-    API key + streaming endpoint are wired. The publish callback emits events
-    onto the EventBus.
+    Args:
+        prompt: user text to send.
+        publish: event publisher from the bus (callable taking one arg).
+        llm_config: optional LLMConfig; when omitted, echo is used.
     """
-    reply = f"(echo) {prompt}"
-    for word in reply.split(" "):
-        await asyncio.sleep(0.02)
-        publish(LLMToken(token=word + " ", ts=time.monotonic()))
-    publish(LLMComplete(text=reply, ts=time.monotonic()))
+    import os
+    api_key = (llm_config.api_key if llm_config and llm_config.api_key else None) or os.environ.get("MINIMAX_API_KEY", "")
+    if not api_key:
+        reply = f"(echo) {prompt}"
+        for word in reply.split(" "):
+            await asyncio.sleep(0.02)
+            publish(LLMToken(token=word + " ", ts=time.monotonic()))
+        publish(LLMComplete(text=reply, ts=time.monotonic()))
+        return
+    from .minimax_client import MiniMaxStreamClient
+    client = MiniMaxStreamClient(
+        api_key=api_key,
+        base_url=(llm_config.base_url if llm_config and llm_config.base_url else "https://api.minimax.io/anthropic"),
+        model=(llm_config.model if llm_config and llm_config.model else "M2.5highspeed"),
+        system=(llm_config.system if llm_config and llm_config.system else ""),
+    )
+    await client.stream(prompt, publish)
 
 
 class VoiceAgent:
@@ -62,7 +76,7 @@ class VoiceAgent:
             self._publish(ev)
 
         try:
-            await _call_llm_streaming(user_text, _emit_tok)
+            await _call_llm_streaming(user_text, _emit_tok, llm_config=self.config.llm)
         except Exception as e:  # noqa: BLE001 — surface to HUD
             self._publish(Error(message=str(e), source="llm", ts=time.monotonic()))
             return ""
@@ -136,7 +150,7 @@ class VoiceAgent:
         self._running = False
 
 
-async def _call_llm(prompt: str) -> str:
+async def _call_llm(prompt: str, *, llm_config=None) -> str:
     """Backwards-compat wrapper: collect tokens from a streaming call."""
     tokens: list[str] = []
 
@@ -144,7 +158,7 @@ async def _call_llm(prompt: str) -> str:
         if isinstance(ev, LLMToken):
             tokens.append(ev.token)
 
-    await _call_llm_streaming(prompt, _capture)
+    await _call_llm_streaming(prompt, _capture, llm_config=llm_config)
     return "".join(tokens).strip()
 
 
