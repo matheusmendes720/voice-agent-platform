@@ -74,7 +74,12 @@ class RichCLI:
         self.bus = EventBus()
         self.state = SessionState(voice_id=config.voicestudio.default_voice)
         self.vs = VoiceStudioClient(config.voicestudio.url, bus=self.bus)
-        self.pipeline = AudioPipeline(bus=self.bus, sample_rate=config.audio.sample_rate)
+        self.pipeline = AudioPipeline(
+            bus=self.bus,
+            sample_rate=config.audio.sample_rate,
+            threshold=config.audio.silence_threshold,
+            input_device=config.audio.input_device,
+        )
         self.agent = VoiceAgent(config, bus=self.bus, voice=self.vs, pipeline=self.pipeline)
         self._stopped = False
 

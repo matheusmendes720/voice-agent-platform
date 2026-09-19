@@ -20,7 +20,12 @@ async def _run_headless(config: VoiceAgentConfig) -> int:
         config,
         bus=bus,
         voice=vs,
-        pipeline=AudioPipeline(bus=bus, sample_rate=config.audio.sample_rate),
+        pipeline=AudioPipeline(
+            bus=bus,
+            sample_rate=config.audio.sample_rate,
+            threshold=config.audio.silence_threshold,
+            input_device=config.audio.input_device,
+        ),
     )
     print("headless mode — bus subscribers: 0 — ctrl-c to stop", file=sys.stderr)
     try:

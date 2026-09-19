@@ -26,7 +26,8 @@ class AudioPipeline:
         sample_rate: int = 16000,
         chunk_ms: int = 100,
         channels: int = 1,
-        threshold: float = 500.0,
+        threshold: float = 100.0,
+        input_device: int | None = 2,
         bus: "EventBus | None" = None,
     ) -> None:
         self.sample_rate = sample_rate
@@ -34,6 +35,7 @@ class AudioPipeline:
         self.chunk_size = int(sample_rate * chunk_ms / 1000)
         self.channels = channels
         self.threshold = threshold
+        self.input_device = input_device
         self.bus = bus
         self._stream: sd.InputStream | None = None
 
@@ -63,6 +65,7 @@ class AudioPipeline:
                 samplerate=self.sample_rate,
                 channels=self.channels,
                 dtype="int16",
+                device=self.input_device,
                 blocksize=self.chunk_size,
             )
             self._stream.start()
@@ -105,6 +108,7 @@ class AudioPipeline:
                 samplerate=self.sample_rate,
                 channels=self.channels,
                 dtype="int16",
+                device=self.input_device,
                 blocksize=self.chunk_size,
             )
             self._stream.start()  # otherwise read() returns -9983 Stream is stopped
