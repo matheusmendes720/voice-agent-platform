@@ -340,37 +340,84 @@ class RichCLI:
             )
             return 2
 
-        self.console.print(self.BANNER)
-        self.console.print(
-            "[bold green]live[/bold green] — speak and watch the panels update; "
-            "type /help for commands. Ctrl+C to exit."
-        )
-
         layout = build_layout(self.state)
-        pump_task = asyncio.create_task(self._pump_events())
+        # pump_events is now folded into _render_loop — no separate task needed.
         agent_task = asyncio.create_task(self.agent.run())
 
-        try:
-            with Live(layout, refresh_per_second=10, screen=False) as live:
-                # Refresh loop on the live display — also drives the display
-                try:
-                    await self._repl(live)
-                except (KeyboardInterrupt, asyncio.CancelledError):
-                    pass
-                finally:
-                    # Final refresh before exit so the latest state is visible
-                    live.update(build_layout(self.state))
-        finally:
-            self._stopped = True
-            agent_task.cancel()
-            pump_task.cancel()
-            self.pipeline.close()
+        with Live(layout, refresh_per_second=10, screen=False) as live:
             try:
-                await self.bus.close()
+                await self._render_loop(live)
+            except (KeyboardInterrupt, asyncio.CancelledError):
+                pass
+
+        self._stopped = True
+        agent_task.cancel()
+        self.pipeline.close()
+        try:
+            await self.bus.close()
+        except Exception:
+            pass
+        self.console.print("[dim]bye.[/dim]")
+        return 0
+
+    async def _render_loop(self, live: Live) -> None:
+        """Pump: refresh the live display + accept /commands via REPL."""
+        sub = self.bus.subscribe()
+        repl_task = asyncio.create_task(self._repl(live))
+        try:
+            while not self._stopped and not repl_task.done():
+                try:
+                    ev = await asyncio.wait_for(sub.next(), timeout=0.05)
+                except asyncio.TimeoutError:
+                    ev = None
+                if ev is not None:
+                    self._apply_event(ev)
+                live.update(build_layout(self.state))
+        finally:
+            try:
+                await sub._q.put(sub._SENTINEL)  # noqa: SLF001
             except Exception:
                 pass
-            self.console.print("[dim]bye.[/dim]")
-        return 0
+            if not repl_task.done():
+                repl_task.cancel()
+            try:
+                await repl_task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+    def _apply_event(self, ev) -> None:
+        """Mutate self.state based on a bus event."""
+        name = type(ev).__name__
+        if name == "MicLevel":
+            self.state.last_mic_rms = ev.rms
+        elif name == "TranscriptFinal":
+            text = (ev.text or "").strip()
+            if text:
+                if self.state.last_user_text and self.state.last_llm_text:
+                    self.state.history.append((self.state.last_user_text, self.state.last_llm_text))
+                self.state.last_user_text = text
+                self.state.last_llm_text = ""
+                self.state.stream_buf = ""
+                self.state.status = "thinking…"
+        elif name == "LLMToken":
+            self.state.stream_buf += ev.token
+        elif name == "LLMComplete":
+            text = (ev.text or "").strip()
+            self.state.last_llm_text = text
+            self.state.stream_buf = ""
+            self.state.status = "listening…"
+        elif name == "LatencySample":
+            self.state.last_latency[ev.stage] = ev.ms
+        elif name == "AudioOutputStart":
+            self.state.status = "speaking…"
+        elif name == "AudioOutputEnd":
+            self.state.last_tts_duration_ms = ev.duration_ms
+            self.state.status = "listening…"
+        elif name == "Error":
+            msg = f"{ev.source}: {ev.message}"
+            self.state.errors.append(msg)
+            self.state.errors = self.state.errors[-3:]
+            self.state.status = f"error: {ev.source}"
 
 
 async def run_cli(config: VoiceAgentConfig) -> int:
