@@ -69,10 +69,54 @@ class VoiceAgent:
         return reply
 
     async def run(self) -> None:
-        """Main agent loop (placeholder — reads chunks when pipeline is set)."""
+        """Main agent loop: mic capture → ASR → LLM → TTS → speaker.
+
+        Loops until stop() is called. Skips a turn silently if any stage is
+        unavailable (no pipeline / no voice client / empty capture).
+        """
+        if self.pipeline is None or self.voice is None:
+            # degraded mode: stay alive but do nothing useful
+            self._running = True
+            while self._running:
+                await asyncio.sleep(0.1)
+            return
+
         self._running = True
+        cfg = self.config.audio
         while self._running:
-            await asyncio.sleep(0.1)
+            try:
+                pcm = await asyncio.to_thread(
+                    self.pipeline.record_utterance,
+                    max_seconds=cfg.get("max_turn_seconds", 8.0)
+                    if isinstance(cfg, dict)
+                    else 8.0,
+                )
+            except Exception as e:  # noqa: BLE001
+                self._publish(Error(message=str(e), source="capture", ts=time.monotonic()))
+                await asyncio.sleep(0.2)
+                continue
+            if not pcm:
+                continue
+            try:
+                transcript = self.voice.transcribe(pcm, sample_rate=self.pipeline.sample_rate)
+            except Exception as e:  # noqa: BLE001
+                self._publish(Error(message=str(e), source="asr", ts=time.monotonic()))
+                continue
+            user_text = (transcript.text or "").strip()
+            if not user_text:
+                continue
+            reply = await self._turn(user_text)
+            if not reply:
+                continue
+            try:
+                synth = self.voice.synthesize(
+                    reply,
+                    profile_id=self.config.voicestudio.default_voice,
+                )
+            except Exception as e:  # noqa: BLE001
+                self._publish(Error(message=str(e), source="tts", ts=time.monotonic()))
+                continue
+            await asyncio.to_thread(self.pipeline.play, synth.audio_bytes, synth.sample_rate)
 
     def stop(self) -> None:
         self._running = False
